@@ -1,5 +1,4 @@
 library(switchBox)
-library(caret)
 
 ############################################
 #
@@ -50,9 +49,8 @@ table(trainingPrediction, trainingGroup)
 
 ### PREPARE DATA
 
-setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
-#setwd("/home/lmgueguen/Documents/M2/PROJET/")
-#setwd("/home/lmgueguen/Documents/M2/PROJET/")
+#setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
+setwd("/home/lmgueguen/Documents/M2/PROJET/")
 
 df = read.csv("projet_data/minusRef_fc2.csv", header = TRUE, dec = ",")
 dim(df)
@@ -139,54 +137,9 @@ auc(reality2, order(prediction2, decreasing = TRUE))
 ############################################
 
 
-
-trainIndex <- groupKFold(rownames(t(df)), k = 5)
-
-
-
-
-### BAGGING
-
-#sampling avec repet
-bagging = function(df, k = 4, axis = 2) {
-  if (axis == 2) {
-    df <- df[,sample(ncol(df))] #shuffle
-    for (i in 1:k) {
-      index_sample <- sample(ncol(df), floor(ncol(df)/k), replace = FALSE)
-      print(length(index_sample))
-      print(is.data.frame(df[,index_sample]))
-      assign(paste('dataset', i, sep = ''), df[,index_sample])
-
-          } 
-  } else {
-    df = df[sample(nrow(df)),] #shuffle
-    for (i in 1:k) {
-      index_sample <- sample(nrow(df), floor(nrow(df)/k), replace = FALSE)
-      print(length(index_sample))
-      print(is.data.frame(df[,index_sample]))
-      assign(paste('dataset', i, sep = ''), df[,index_sample])
-    }
-  }
-  for (i in 1:k) {
-    bags <- list(paste('set', i, sep = '') = paste('datset', i, sep = ''))
-  }
-  return(bags)
-}
-
-# kfold_set = function(df, k, axis = 1) {
-#   if (axis == 1) {
-#     df <- df[,sample(ncol(df))] #shuffling
-#     index = cut(seq.int(1, ncol(df)), breaks = k, labels=FALSE)
-#     for (i in 1:k) {
-#       kfold <- list(paste('set', i, sep = '') = assign(paste('datset', i, sep = ''), df[,which(index == i)])) #### DOES NOT WORK
-#     }
-#   }
-# }
-
-
 ### KFOLD STRATIFIE
 
-#la première fonciton sépare le jeu de donnles en dataframes par catégories, en calculant la proportion du jeu de données initiale pour chaque catégorie
+#la premi?re fonciton s?pare le jeu de donnles en dataframes par cat?gories, en calculant la proportion du jeu de donn?es initiale pour chaque cat?gorie
 
 sep_by_class = function(df, axis = 2) {
   ###   df a dataframe 
@@ -205,54 +158,84 @@ sep_by_class = function(df, axis = 2) {
     names(S3_object) <- as.list(c("labels", "proportion", class_labels)) #renames the S3 object attributes
   } else {
     class_labels <- unique(rownames(df))
+    print(class_labels)
     for (i in 1:length(class_labels)) {
       prop_class <- length(which(rownames(df) == class_labels[i])) / dim(df)[1]
       list_prop <- append(list_prop, prop_class)
     }
+    print(list_prop)
     S3_object <- list(class_labels, list_prop) #initialise S3 object with the proportions for each class
     for (i in 1:length(class_labels)) {
       S3_object <- append(S3_object, list(subset(df, select = which(rownames(df) == class_labels[i])) )) #adds a separated dataframe for each class
     }
-    names(S3_object) <- as.list(c("proportion", class_labels)) #renames the S3 object attributes
+    names(S3_object) <- as.list(c("labels", "proportion", class_labels)) #renames the S3 object attributes
+  }
+  for (i in S3_object$labels) {
+   colnames(S3_object[[i]]) <- rep(i, dim(S3_object[[i]])[2])
   }
   return(S3_object) #returns S3 class object with proportions for each class, dataframes for the data from each class, in the same order 
 }
 
+#does not woooooooooooooork
+rename_ <- function(x, i) {
+  col_names <- colnames(x) 
+  col_names <- gsub(paste('^X*', i[1], sep = ""), i[1], col_names)
+  col_names <- gsub(paste('^X*', i[2], sep = ""), i[2], col_names)
+  return(col_names)
+}
 
 ### add if else conditions for rows and columns with arg axis
 
 strat_kfold = function(df, k, axis = 2) {
+  if (is.data.frame(df) == FALSE) {
+    stop("ERROR: df must be a dataframe.")
+  }
   if (axis == 2) {
     data_by_class <- sep_by_class(df, axis = axis) #splits dataframe by class in sub dataframe as S3 class object attributes
     sets_index = list() #list of indexes for the k subsets for kfold cv
     sets_index <- lapply(data_by_class[3:length(data_by_class)], function(x) split(sample(c(1:dim(x)[2]), dim(x)[2]), sort(c(1:dim(x)[2])%%k +1))) #list, for each class there are k lists containing the indexes 
     names(sets_index) <- as.list(data_by_class$labels)
     data_by_class_by_fold <- lapply(data_by_class$labels, function(x) lapply(sets_index[[x]], function(y) data_by_class[[x]][,y]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
-    names(data_by_class_by_fold) <- as.list(data_by_class$labels) #pas besoin visiblement
+    names(data_by_class_by_fold) <- as.list(data_by_class$labels)
     folds <- list()
     folds_names <- list()
     for (i in c(1:k)) {
-      folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) )
+      folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) ) #adds class1 and class2 datasets together to for k sub datasets with equal proportions of each class
+      colnames(folds) <- col_names
       folds_names <- append(folds_names, paste("fold", i, sep = "")) 
     }
     names(folds) <- folds_names
-  } else {
-    data_by_class <- sep_by_class(df, axis = axis) #splits dataframe by class in sub dataframe as S3 class object attributes
-    sets_index = list() #list of indexes for the k subsets for kfold cv
-    sets_index <- lapply(data_by_class[3:length(data_by_class)], function(x) split(sample(c(1:dim(x)[1]), dim(x)[1]), sort(c(1:dim(x)[1])%%k +1))) #list, for each class there are k lists containing the indexes 
-    names(sets_index) <- as.list(data_by_class$labels)
-    data_by_class_by_fold <- lapply(data_by_class$labels, function(x) lapply(sets_index[[x]], function(y) data_by_class[[x]][y,]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
-    names(data_by_class_by_fold) <- as.list(data_by_class$labels) #pas besoin visiblement
-    folds <- list()
-    folds_names <- list()
-    for (i in c(1:k)) {
-      folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) )
-      folds_names <- append(folds_names, paste("fold", i, sep = "")) 
-    }
-  }
+  } #else {  #### the next lines do not work
+  #   data_by_class <- sep_by_class(df, axis = axis) #splits dataframe by class in sub dataframe as S3 class object attributes
+  #   sets_index = list() #list of indexes for the k subsets for kfold cv
+  #   sets_index <- lapply(data_by_class[3:length(data_by_class)], function(x) split(sample(c(1:dim(x)[1]), dim(x)[1]), sort(c(1:dim(x)[1])%%k +1))) #list, for each class there are k lists containing the indexes 
+  #   names(sets_index) <- as.list(data_by_class$labels)
+  #   data_by_class_by_fold <- lapply(data_by_class$labels, function(x) lapply(sets_index[[x]], function(y) data_by_class[[x]][y,]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
+  #   names(data_by_class_by_fold) <- as.list(data_by_class$labels) #pas besoin visiblement
+  #   folds <- list()
+  #   folds_names <- list()
+  #   for (i in c(1:k)) {
+  #     folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) )
+  #     folds_names <- append(folds_names, paste("fold", i, sep = "")) 
+  #   }
+  # }
   return(folds)
 }
 
+cross_validation <- function(strat_data, k = 3) {
+  results <- list()
+  for (i in names(strat_data) ) {
+    train_data <- strat_data[[i]]
+    train_matrix <- as.matrix(train_data) #matrix of validation
+    validation_data <- strat_data
+    validation_data$i <- NULL #eliminates the validation dataset from the list of all folds
+    validation_matrix <- as.matrix(unlist(validation_data, recursive = FALSE))
+    print(as.factor(colnames(train_data)))
+    classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = k) #trains classifier
+    prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
+    results <- append(results, prediction)
+  }
+}
 
 error_metric = function(table) {
   TP =table[1,1]
@@ -272,8 +255,12 @@ data_by_class = sep_by_class(df, axis = 2) #Marche pas avec axis = 1
 
 data_by_class_by_fold <- strat_kfold(df, k = 3)
 
+cross_validation(data_by_class_by_fold)
+
 df_T <- t(df)
 
-data_by_class_by_fold_T <- strat_kfold(df_T, k = 3, axis = 1) #marche pas encore
+data_by_class <- sep_by_class(df, axis = 2)
+
+data_by_class_T <- sep_by_class(df_T, axis = 1) #marche pas encore
 
 ## stratified k-fold must be the way to validate the model, because of the small dataset and imbalance between the 2 classes
