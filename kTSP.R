@@ -49,8 +49,8 @@ table(trainingPrediction, trainingGroup)
 
 ### PREPARE DATA
 
-#setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
-setwd("/home/lmgueguen/Documents/M2/PROJET/")
+setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
+#setwd("/home/lmgueguen/Documents/M2/PROJET/")
 
 df = read.csv("projet_data/minusRef_fc2.csv", header = TRUE, dec = ",")
 dim(df)
@@ -67,7 +67,7 @@ rownames(df) <- df$Genes
 df <- subset(df, select = -c(Genes))
 
 col_names = colnames(df)
-col_names = gsub('^SLS.*', 'nonallergique', col_names) #uses regex to change lines starting with SLS (followed by any character any number of times), by irritant
+col_names = gsub('^SLS.*', 'autres', col_names) #uses regex to change lines starting with SLS (followed by any character any number of times), by irritant
 col_names = gsub('^[^[:lower:]].*' ,'allergique' , col_names) #changes lines starting NOT by a lower character and followed by any any number of times by allergique
 colnames(df) <- col_names
 colnames(df)
@@ -176,12 +176,19 @@ sep_by_class = function(df, axis = 2) {
   return(S3_object) #returns S3 class object with proportions for each class, dataframes for the data from each class, in the same order 
 }
 
-#does not woooooooooooooork
+#WORKS GREAT HELL TEAH BABY
 rename_ <- function(x, i) {
   col_names <- colnames(x) 
-  col_names <- gsub(paste('^X*', i[1], sep = ""), i[1], col_names)
-  col_names <- gsub(paste('^X*', i[2], sep = ""), i[2], col_names)
-  return(col_names)
+  # col_names <- gsub(paste('^X.*', i[1], sep = ""), i[1], col_names)
+  # col_names <- gsub(paste(i[1], '.*$', sep = ""), i[1], col_names)
+  # col_names <- gsub(paste('^X.*', i[2], sep = ""), i[2], col_names)
+  # col_names <- gsub(paste(i[2], '.*$', sep = ""), i[2], col_names)
+  col_names <- gsub(paste('^.*', i[1], '.*$', sep = ""), i[1], col_names)
+  #col_names <- gsub(paste(i[1], '.*$', sep = ""), i[1], col_names)
+  col_names <- gsub(paste('^.*', i[2], '.*$', sep = ""), i[2], col_names)
+  #col_names <- gsub(paste(i[2], '.*$', sep = ""), i[2], col_names)
+  colnames(x) <- col_names
+  return(x)
 }
 
 ### add if else conditions for rows and columns with arg axis
@@ -201,7 +208,7 @@ strat_kfold = function(df, k, axis = 2) {
     folds_names <- list()
     for (i in c(1:k)) {
       folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) ) #adds class1 and class2 datasets together to for k sub datasets with equal proportions of each class
-      colnames(folds) <- col_names
+      folds <- lapply(folds, function(x) rename_(x, data_by_class$labels))
       folds_names <- append(folds_names, paste("fold", i, sep = "")) 
     }
     names(folds) <- folds_names
@@ -222,18 +229,22 @@ strat_kfold = function(df, k, axis = 2) {
   return(folds)
 }
 
-cross_validation <- function(strat_data, k = 3) {
+cross_validation <- function(df, axis = 2, k = 3) {
+  data_by_class = sep_by_class(df) 
+  data_by_class_by_fold <- strat_kfold(df)
   results <- list()
   for (i in names(strat_data) ) {
     train_data <- strat_data[[i]]
     train_matrix <- as.matrix(train_data) #matrix of validation
     validation_data <- strat_data
     validation_data$i <- NULL #eliminates the validation dataset from the list of all folds
-    validation_matrix <- as.matrix(unlist(validation_data, recursive = FALSE))
-    print(as.factor(colnames(train_data)))
-    classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = k) #trains classifier
-    prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
-    results <- append(results, prediction)
+    validation_data <- do.call("cbind", validation_data)
+    rename_(validation_data)
+    validation_matrix <- as.matrix(validation_data)
+    print(validation_matrix)
+    # classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = k) #trains classifier
+    # prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
+    # results <- append(results, prediction)
   }
 }
 
