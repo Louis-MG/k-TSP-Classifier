@@ -67,7 +67,7 @@ rownames(df) <- df$Genes
 df <- subset(df, select = -c(Genes))
 
 col_names = colnames(df)
-col_names = gsub('^SLS.*', 'autres', col_names) #uses regex to change lines starting with SLS (followed by any character any number of times), by irritant
+col_names = gsub('^SLS.*', 'autre', col_names) #uses regex to change lines starting with SLS (followed by any character any number of times), by irritant
 col_names = gsub('^[^[:lower:]].*' ,'allergique' , col_names) #changes lines starting NOT by a lower character and followed by any any number of times by allergique
 colnames(df) <- col_names
 colnames(df)
@@ -124,11 +124,6 @@ table(prediction2, reality2)
 # allergique              6              0
 # non-allergique          0              1
 
-library(pROC)
-auc(reality2, order(prediction2, decreasing = TRUE)) 
-#when setting the decreasing = TRUE, auc of 1 and if the parameter is set on default (decreasing = FALSE), auc = 0.667
-#this should be looked at before further exploration
-
 
 ############################################
 #
@@ -139,12 +134,12 @@ auc(reality2, order(prediction2, decreasing = TRUE))
 
 ### KFOLD STRATIFIE
 
-#la premi?re fonciton s?pare le jeu de donnles en dataframes par cat?gories, en calculant la proportion du jeu de donn?es initiale pour chaque cat?gorie
+#la premiere fonction separe le jeu de donnees en dataframes par categories, en calculant la proportion du jeu de donnees initiale pour chaque categorie
 
 sep_by_label = function(df) {
   #
-  # df  : dataframe
-  # This function separates the dataframe into a list of dataframes, each list corresponding to a class
+  #' df  : dataframe. Genes as rows and individuals as columns.
+  #' This function separates the dataframe into a list of dataframes, each list corresponding to a class
   #
   if (is.data.frame(df) == FALSE) {
     stop("ERROR: df must be a dataframe.")
@@ -169,9 +164,9 @@ sep_by_label = function(df) {
 #WORKS GREAT HELL TEAH BABY
 rename_ <- function(x, i) {
   #
-  # x : dataframe
-  # i : a class label
-  # This function renames the classes correctly after some manipulation leads to the addition of unwanted characters to column's names
+  #' x : dataframe
+  #' i : a class label
+  #' This function renames the classes correctly after some manipulation leads to the addition of unwanted characters to column's names
   #
   col_names <- colnames(x) 
   col_names <- gsub(paste('^.*', i[1], '.*$', sep = ""), i[1], col_names)
@@ -180,13 +175,11 @@ rename_ <- function(x, i) {
   return(x)
 }
 
-### add if else conditions for rows and columns with arg axis
-
 strat_kfold = function(df, k) {
   #
-  # df : a dataframe
-  # k : numnber of subsets wanted
-  # This function uses the data separated by class to yield a list of dataframes, each being a sub-dataset with the original proportions of each class. 
+  #' df : a dataframe
+  #' k : numnber of subsets wanted
+  #' This function uses the data separated by class to yield a list of dataframes, each being a sub-dataset with the original proportions of each class. 
   #
   if (is.data.frame(df) == FALSE) {
     stop("ERROR: df must be a dataframe.")
@@ -210,6 +203,13 @@ strat_kfold = function(df, k) {
 
 
 classify <- function(df_by_fold, fold, k = 3, N) {
+  #
+  #' df_by_fold : list of dataframes. Each dataframe is a fold for k-fold cross-validation
+  #' fold : element of the list df_by_fold. Stratified subset of data to use as validation data for the cross-validation round.
+  #' k : number of folds for cross-validation
+  #' N : number of TSPs to retain.
+  #' This function uses the fold as validation data and the other subsets as training data. Returns a confusion matrix, the metrics and the k TSPs from the classifier.
+  #
   validation_data <- fold #validation set
   validation_matrix <- as.matrix(validation_data)
   reality <- as.factor(colnames(validation_data)) #truth about validation set labels
@@ -228,12 +228,22 @@ classify <- function(df_by_fold, fold, k = 3, N) {
 
 
 cross_validation <- function(df, k = 3, N = 3) {
+  #
+  #' df : dataframe
+  #' k : number of folds for cross-validation
+  #' N : number of TSPs to retain 
+  #' This function applies cross-validation using k-TSP to the data. It returns the confusion matrix, metrics and N TSPs for each cross-validation round.
+  #
   data_by_label <- sep_by_label(df) 
   data_by_fold <- strat_kfold(df, k)
   lapply(data_by_fold, function(x) classify(data_by_fold, x, k, N))
 }
 
 error_metrics = function(table) {
+  #
+  #' table : confusion matrix (actually a table)
+  #' This function calculates precision, accuracy, and recall scores of a classification with known labels/classes.
+  #
   TP <- table[1,1]
   TN <- table[2,2]
   FP <- table[1,2]
@@ -259,47 +269,69 @@ cross_validation(df, k = 4, N = 5)
 #
 ############################################
 
-compare_rules <- function(individual) {
-  autres = 0
-  allergiques = 0
-  if (df["GBP1", i] < df["Ly6K", i]) {
-    autres = autres + 1
+compare_rules <- function(individual, confidence = FALSE) {
+  #
+  #' individual : columns name of a dataframe that we want to assign to a class
+  #' confidence : boolean. Shows confidence in class attribution
+  #' This function uses kTSP rules from the stratified cross-validation to assign individuals to a class of eczema.
+  #
+  autre = 0
+  allergique = 0
+  if (df["GBP1", individual] < df["LY6K", individual]) {
+    autre = autre + 1
   } else {
-    allergiques = allergiques + 1
+    allergique = allergique + 1
   }
-  if (df["PLSCR1.1", i] < df["SCCPDH", i]) {
-    autres = autres + 1
+  if (df["PLSCR1.1", individual] < df["SCCPDH", individual]) {
+    autre = autre + 1
   } else {
-    allergiques = allergiques + 1
+    allergique = allergique + 1
   }
-  if (df["CDKN2D", i] < df["PLA2G4F", i]) {
-    autres = autres + 1
+  if (df["CDKN2D", individual] < df["PLA2G4F", individual]) {
+    autre = autre + 1
   } else {
-    allergiques = allergiques + 1
+    allergique = allergique + 1
   }
-  if (df["DTX3L.1", i] < df["ANKK1", i]) {
-    autres = autres + 1
+  if (df["DTX3L.1", individual] < df["ANKK1", individual]) {
+    autre = autre + 1
   } else {
-    allergiques = allergiques + 1
+    allergique = allergique + 1
   }
-  if (df["ERAP2.1", i] < df["GSTA3", i]) {
-    autres = autres + 1
+  if (df["ERAP2.1", individual] < df["GSTA3", individual]) {
+    autre = autre + 1
   } else {
-    allergiques = allergiques + 1
+    allergique = allergique + 1
   }
-  if (autres > allergiques) {
-    return("autres")
+  if (autre > allergique) {
+    if (confidence) {
+      print(autre/5)
+      return("autre")
+    } else {
+      return("autre")
+    }
   } else {
-    return("allergique")
+    if (confidence) {
+      print(allergique/5)
+      return("allergique")
+    } else {
+      return("allergique")
+    }
   }
 }
 
-eczema_classifier <- function(df) {
+eczema_classifier <- function(df, confidence = FALSE) {
   #
-  # df : dataframe. Genes must be in rows and individuals in columns
-  # This function is the actual classifier to distinguish allergic eczema from other types.
+  #' df : dataframe. Genes must be in rows and individuals in columns
+  #' confidence : boolean. Shows confidence in class attribution
+  #' This function is the actual classifier to distinguish allergic eczema from other types. Returns a list with classes for each individual.
   #
   df <- df[ which(rownames(df) %in% c("LY6K", "GBP1", "SCCPDH", "PLSCR1.1", "PLA2G4F", "CDKN2D", "ANKK1", "DTX3L.1", "GSTA3", "ERAP2.1")) , ]
-  classes <- lapply(colnames(df), function(x) compare_rules(x))
+  classes <- lapply(colnames(df), function(x) compare_rules(x, confidence))
   return(classes)
 }
+
+test = eczema_classifier(df)
+test = eczema_classifier(df, confidence = TRUE) #permet de visualiser la confiance en l'attribution de la classe. Compris dans [0;1]
+test == colnames(df) #permet de comparer les prédictions avec les classes déjà attribuées du jeu de données
+sum(test == colnames(df)) #la valeur TRUE vaut 1, et FALSE vaut 0, donc faire la sum d'un array de TRUE et FALSE permet de connaître le nombre de TRUE
+sum(test == colnames(df))/dim(df)[2]#par extension, on peut transformer cette somme en % pour connaître la justesse d'autant de prédicitons que l'on veut (sans regarder "à la main", ce qui est horrible sur bcp de données)
