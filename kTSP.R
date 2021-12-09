@@ -142,7 +142,13 @@ auc(reality2, order(prediction2, decreasing = TRUE))
 #la premi?re fonciton s?pare le jeu de donnles en dataframes par cat?gories, en calculant la proportion du jeu de donn?es initiale pour chaque cat?gorie
 
 sep_by_label = function(df) {
-  ###   df a dataframe 
+  #
+  # df  : dataframe
+  # This function separates the dataframe into a list of dataframes, each list corresponding to a class
+  #
+  if (is.data.frame(df) == FALSE) {
+    stop("ERROR: df must be a dataframe.")
+  }
   list_prop <- list() #list of the proportion of each class
   class_labels <- unique(colnames(df))
   for (i in 1:(length(class_labels))) {
@@ -162,6 +168,11 @@ sep_by_label = function(df) {
 
 #WORKS GREAT HELL TEAH BABY
 rename_ <- function(x, i) {
+  #
+  # x : dataframe
+  # i : a class label
+  # This function renames the classes correctly after some manipulation leads to the addition of unwanted characters to column's names
+  #
   col_names <- colnames(x) 
   col_names <- gsub(paste('^.*', i[1], '.*$', sep = ""), i[1], col_names)
   col_names <- gsub(paste('^.*', i[2], '.*$', sep = ""), i[2], col_names)
@@ -172,6 +183,11 @@ rename_ <- function(x, i) {
 ### add if else conditions for rows and columns with arg axis
 
 strat_kfold = function(df, k) {
+  #
+  # df : a dataframe
+  # k : numnber of subsets wanted
+  # This function uses the data separated by class to yield a list of dataframes, each being a sub-dataset with the original proportions of each class. 
+  #
   if (is.data.frame(df) == FALSE) {
     stop("ERROR: df must be a dataframe.")
   }
@@ -179,13 +195,13 @@ strat_kfold = function(df, k) {
   sets_index = list() #list of indexes for the k subsets for kfold cv
   sets_index <- lapply(data_by_label[3:length(data_by_label)], function(x) split(sample(c(1:dim(x)[2]), dim(x)[2]), sort(c(1:dim(x)[2])%%k +1))) #list, for each class there are k lists containing the indexes 
   names(sets_index) <- as.list(data_by_label$labels)
-  data_by_fold <- lapply(data_by_label$labels, function(x) lapply(sets_index[[x]], function(y) data_by_label[[x]][,y]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
+  data_by_fold <- lapply(data_by_label$labels, function(x) lapply(sets_index[[x]], function(y) data_by_label[[x]][,y])) #here the indexes are used to make a list of lists : level one is the class, level 2 (sublevel) is the fold
   names(data_by_fold) <- as.list(data_by_label$labels)
-  folds <- list()
+  folds <- list() #initialises the final object
   folds_names <- list()
   for (i in c(1:k)) {
     folds <- append(folds, list(as.data.frame(lapply(data_by_label$labels, function(x) data_by_fold[[x]][i]) )) ) #adds class1 and class2 datasets together to for k sub datasets with equal proportions of each class
-    folds <- lapply(folds, function(x) rename_(x, data_by_label$labels))
+    folds <- lapply(folds, function(x) rename_(x, data_by_label$labels)) 
     folds_names <- append(folds_names, paste("fold", i, sep = "")) 
   }
   names(folds) <- folds_names
@@ -196,17 +212,18 @@ strat_kfold = function(df, k) {
 classify <- function(df_by_fold, fold, k = 3, N) {
   validation_data <- fold #validation set
   validation_matrix <- as.matrix(validation_data)
-  reality <- as.factor(colnames(validation_data)) #trutch about validation set labels
+  reality <- as.factor(colnames(validation_data)) #truth about validation set labels
   train_data <- df_by_fold
   train_data$i <- NULL #eliminates the validation dataset from the list of all folds
-  train_data <- do.call("cbind", train_data)
+  train_data <- do.call("cbind", train_data) #binds together the training folds
   train_data <- rename_(train_data, data_by_label$labels)
   train_matrix <- as.matrix(train_data)
   classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = N) #trains classifier
   prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
-  result_accuracy <- table(prediction, reality)
+  result_table <- table(prediction, reality)
+  print(result_table)
+  error_metrics(result_table)
   print(classifier$TSPs)
-  result_accuracy
 }
 
 
@@ -214,23 +231,9 @@ cross_validation <- function(df, k = 3, N = 3) {
   data_by_label <- sep_by_label(df) 
   data_by_fold <- strat_kfold(df, k)
   lapply(data_by_fold, function(x) classify(data_by_fold, x, k, N))
-  # for (i in names(data_by_class_by_fold) ) {
-  #   validation_data <- data_by_class_by_fold[[i]] #validation set
-  #   validation_matrix <- as.matrix(validation_data)
-  #   reality <- as.factor(colnames(validation_data)) #trutch about validation set labels
-  #   train_data <- data_by_class_by_fold
-  #   train_data$i <- NULL #eliminates the validation dataset from the list of all folds
-  #   train_data <- do.call("cbind", train_data)
-  #   train_data <- rename_(train_data, data_by_class$labels)
-  #   train_matrix <- as.matrix(train_data)
-  #   classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = k) #trains classifier
-  #   prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
-  #   result <- table(prediction, reality)
-  #   print(result)
-  #   }
 }
 
-error_metric = function(table) {
+error_metrics = function(table) {
   TP <- table[1,1]
   TN <- table[2,2]
   FP <- table[1,2]
@@ -250,4 +253,53 @@ data_by_fold <- strat_kfold(df, k = 3)
 
 cross_validation(df, k = 4, N = 5)
 
-## stratified k-fold must be the way to validate the model, because of the small dataset and imbalance between the 2 classes
+############################################
+#
+#   CLASSIFIER
+#
+############################################
+
+compare_rules <- function(individual) {
+  autres = 0
+  allergiques = 0
+  if (df["GBP1", i] < df["Ly6K", i]) {
+    autres = autres + 1
+  } else {
+    allergiques = allergiques + 1
+  }
+  if (df["PLSCR1.1", i] < df["SCCPDH", i]) {
+    autres = autres + 1
+  } else {
+    allergiques = allergiques + 1
+  }
+  if (df["CDKN2D", i] < df["PLA2G4F", i]) {
+    autres = autres + 1
+  } else {
+    allergiques = allergiques + 1
+  }
+  if (df["DTX3L.1", i] < df["ANKK1", i]) {
+    autres = autres + 1
+  } else {
+    allergiques = allergiques + 1
+  }
+  if (df["ERAP2.1", i] < df["GSTA3", i]) {
+    autres = autres + 1
+  } else {
+    allergiques = allergiques + 1
+  }
+  if (autres > allergiques) {
+    return("autres")
+  } else {
+    return("allergique")
+  }
+}
+
+eczema_classifier <- function(df) {
+  #
+  # df : dataframe. Genes must be in rows and individuals in columns
+  # This function is the actual classifier to distinguish allergic eczema from other types.
+  #
+  df <- df[ which(rownames(df) %in% c("LY6K", "GBP1", "SCCPDH", "PLSCR1.1", "PLA2G4F", "CDKN2D", "ANKK1", "DTX3L.1", "GSTA3", "ERAP2.1")) , ]
+  classes <- lapply(colnames(df), function(x) compare_rules(x))
+  return(classes)
+}
