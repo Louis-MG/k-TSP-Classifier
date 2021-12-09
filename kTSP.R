@@ -49,8 +49,8 @@ table(trainingPrediction, trainingGroup)
 
 ### PREPARE DATA
 
-setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
-#setwd("/home/lmgueguen/Documents/M2/PROJET/")
+#setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
+setwd("/home/lmgueguen/Documents/M2/PROJET/")
 
 df = read.csv("projet_data/minusRef_fc2.csv", header = TRUE, dec = ",")
 dim(df)
@@ -141,7 +141,7 @@ auc(reality2, order(prediction2, decreasing = TRUE))
 
 #la premi?re fonciton s?pare le jeu de donnles en dataframes par cat?gories, en calculant la proportion du jeu de donn?es initiale pour chaque cat?gorie
 
-sep_by_class = function(df) {
+sep_by_label = function(df) {
   ###   df a dataframe 
   list_prop <- list() #list of the proportion of each class
   class_labels <- unique(colnames(df))
@@ -175,17 +175,17 @@ strat_kfold = function(df, k) {
   if (is.data.frame(df) == FALSE) {
     stop("ERROR: df must be a dataframe.")
   }
-  data_by_class <- sep_by_class(df) #splits dataframe by class in sub dataframe as S3 class object attributes
+  data_by_label <- sep_by_label(df) #splits dataframe by class in sub dataframe as S3 class object attributes
   sets_index = list() #list of indexes for the k subsets for kfold cv
-  sets_index <- lapply(data_by_class[3:length(data_by_class)], function(x) split(sample(c(1:dim(x)[2]), dim(x)[2]), sort(c(1:dim(x)[2])%%k +1))) #list, for each class there are k lists containing the indexes 
-  names(sets_index) <- as.list(data_by_class$labels)
-  data_by_class_by_fold <- lapply(data_by_class$labels, function(x) lapply(sets_index[[x]], function(y) data_by_class[[x]][,y]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
-  names(data_by_class_by_fold) <- as.list(data_by_class$labels)
+  sets_index <- lapply(data_by_label[3:length(data_by_label)], function(x) split(sample(c(1:dim(x)[2]), dim(x)[2]), sort(c(1:dim(x)[2])%%k +1))) #list, for each class there are k lists containing the indexes 
+  names(sets_index) <- as.list(data_by_label$labels)
+  data_by_fold <- lapply(data_by_label$labels, function(x) lapply(sets_index[[x]], function(y) data_by_label[[x]][,y]))#here the indexes are used to make a list of dataframes each correspondinfg to a fold
+  names(data_by_fold) <- as.list(data_by_label$labels)
   folds <- list()
   folds_names <- list()
   for (i in c(1:k)) {
-    folds <- append(folds, list(as.data.frame(lapply(data_by_class$labels, function(x) data_by_class_by_fold[[x]][i]) )) ) #adds class1 and class2 datasets together to for k sub datasets with equal proportions of each class
-    folds <- lapply(folds, function(x) rename_(x, data_by_class$labels))
+    folds <- append(folds, list(as.data.frame(lapply(data_by_label$labels, function(x) data_by_fold[[x]][i]) )) ) #adds class1 and class2 datasets together to for k sub datasets with equal proportions of each class
+    folds <- lapply(folds, function(x) rename_(x, data_by_label$labels))
     folds_names <- append(folds_names, paste("fold", i, sep = "")) 
   }
   names(folds) <- folds_names
@@ -193,25 +193,27 @@ strat_kfold = function(df, k) {
 }
 
 
-classify <- function(df_by_fold, fold, k = 3) {
+classify <- function(df_by_fold, fold, k = 3, N) {
   validation_data <- fold #validation set
   validation_matrix <- as.matrix(validation_data)
   reality <- as.factor(colnames(validation_data)) #trutch about validation set labels
   train_data <- df_by_fold
   train_data$i <- NULL #eliminates the validation dataset from the list of all folds
   train_data <- do.call("cbind", train_data)
-  train_data <- rename_(train_data, data_by_class$labels)
+  train_data <- rename_(train_data, data_by_label$labels)
   train_matrix <- as.matrix(train_data)
-  classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = k) #trains classifier
+  classifier <- SWAP.KTSP.Train(train_matrix, as.factor(colnames(train_data)), krange = N) #trains classifier
   prediction <- SWAP.KTSP.Classify(validation_matrix, classifier) #uses classifier to ... classify the validation set
-  result <- table(prediction, reality)
+  result_accuracy <- table(prediction, reality)
+  print(classifier$TSPs)
+  result_accuracy
 }
 
 
-cross_validation <- function(df, k = 3) {
-  data_by_class <- sep_by_class(df) 
-  data_by_class_by_fold <- strat_kfold(df, k)
-  lapply(data_by_class_by_fold, function(x) classify(data_by_class_by_fold, x, k))
+cross_validation <- function(df, k = 3, N = 3) {
+  data_by_label <- sep_by_label(df) 
+  data_by_fold <- strat_kfold(df, k)
+  lapply(data_by_fold, function(x) classify(data_by_fold, x, k, N))
   # for (i in names(data_by_class_by_fold) ) {
   #   validation_data <- data_by_class_by_fold[[i]] #validation set
   #   validation_matrix <- as.matrix(validation_data)
@@ -242,10 +244,10 @@ error_metric = function(table) {
 }
 
 
-data_by_class = sep_by_class(df) #Marche pas avec axis = 1
+data_by_label = sep_by_label(df) #Marche pas avec axis = 1
 
-data_by_class_by_fold <- strat_kfold(df, k = 5)
+data_by_fold <- strat_kfold(df, k = 3)
 
-cross_validation(df, k = 5)
+cross_validation(df, k = 4, N = 5)
 
 ## stratified k-fold must be the way to validate the model, because of the small dataset and imbalance between the 2 classes
