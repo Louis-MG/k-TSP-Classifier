@@ -202,14 +202,16 @@ strat_kfold = function(df, k) {
 }
 
 
-classify <- function(df_by_fold, fold, k = 3, N) {
+classify <- function(df_by_fold, data_by_label, fold, k = 3, N) {
   #
   #' df_by_fold : list of dataframes. Each dataframe is a fold for k-fold cross-validation
+  #' data_by_label : list of labels, proportions of each label, and dataframes for each class
   #' fold : element of the list df_by_fold. Stratified subset of data to use as validation data for the cross-validation round.
   #' k : number of folds for cross-validation
   #' N : number of TSPs to retain.
   #' This function uses the fold as validation data and the other subsets as training data. Returns a confusion matrix, the metrics and the k TSPs from the classifier.
   #
+  require(switchBox)
   validation_data <- fold #validation set
   validation_matrix <- as.matrix(validation_data)
   reality <- as.factor(colnames(validation_data)) #truth about validation set labels
@@ -236,7 +238,7 @@ cross_validation <- function(df, k = 3, N = 3) {
   #
   data_by_label <- sep_by_label(df) 
   data_by_fold <- strat_kfold(df, k)
-  lapply(data_by_fold, function(x) classify(data_by_fold, x, k, N))
+  lapply(data_by_fold, function(x) classify(data_by_fold, data_by_label, x, k, N))
 }
 
 error_metrics = function(table) {
