@@ -49,8 +49,8 @@ table(trainingPrediction, trainingGroup)
 
 ### PREPARE DATA
 
-#setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
-setwd("/home/lmgueguen/Documents/M2/PROJET/")
+setwd("C:/Users/lmgue/OneDrive/M2/PROJET/")
+#setwd("/home/lmgueguen/Documents/M2/PROJET/")
 
 df = read.csv("projet_data/minusRef_fc2.csv", header = TRUE, dec = ",")
 dim(df)
@@ -332,8 +332,41 @@ eczema_classifier <- function(df, confidence = FALSE) {
   return(classes)
 }
 
+############################################
+#
+#   TEST SUR DONNEES  MICROARRAY
+#
+############################################
+
 test = eczema_classifier(df)
 test = eczema_classifier(df, confidence = TRUE) #permet de visualiser la confiance en l'attribution de la classe. Compris dans [0;1]
-test == colnames(df) #permet de comparer les prédictions avec les classes déjà attribuées du jeu de données
+#test == colnames(df) #permet de comparer les prédictions avec les classes déjà attribuées du jeu de données
 sum(test == colnames(df)) #la valeur TRUE vaut 1, et FALSE vaut 0, donc faire la sum d'un array de TRUE et FALSE permet de connaître le nombre de TRUE
-sum(test == colnames(df))/dim(df)[2]#par extension, on peut transformer cette somme en % pour connaître la justesse d'autant de prédicitons que l'on veut (sans regarder "à la main", ce qui est horrible sur bcp de données)
+sum(test == colnames(df))/dim(df)[2]#par extension, on peut transformer cette somme en % pour connaître la justesse d'autant de prédictions que l'on veut (sans regarder "à la main", ce qui est horrible sur bcp de données)
+
+############################################
+#
+#   CROSS VALIDATION qRT-PCR
+#
+############################################
+
+#traitement des donnees qrt-pcr
+df1 = read.csv("projet_data/jeu de donn?es classif apprentissage.csv", dec = ",") #chargement
+df1 <- df1[ , ! names(df1) %in% c("patients")] #suppression colonne index patients
+col_names <- as.list(df1["Diagnosis"])$Diagnosis #sauvegarde des classes
+df1 <- df1[ , ! names(df1) %in% c("Diagnosis")] ##suppression de la colonne diagnostic
+row_names <- colnames(df1) #rotation de la dataframe
+df1 <- t(df1)
+df1 <- as.data.frame(df1)
+df1 <- lapply(df1, function(x) as.numeric(x))
+df1 <- as.data.frame(df1)
+colnames(df1) <- col_names
+rownames(df1) <- row_names
+#la dataframe est prête
+
+# test des foncitons sur les donnees traitees
+data_by_label = sep_by_label(df1) #
+data_by_fold <- strat_kfold(df1, k = 3)
+cross_validation(df1, k = 4, N = 5)
+
+#les résultatas sont moins bons, donc on garde ceux des micro-array.
